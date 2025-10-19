@@ -36,11 +36,12 @@
         const bidderNameInput = document.getElementById('bidderName');
         const bidAmountInput = document.getElementById('bidAmount');
         const toastContainer = document.getElementById('toastContainer');
-        const clearDatabaseBtn = document.getElementById('clearDatabaseBtn');
         const aboutBtn = document.getElementById('aboutBtn');
         const aboutModal = document.getElementById('aboutModal');
         const closeAboutModal = document.getElementById('closeAboutModal');
         const closeAboutModalBtn = document.getElementById('closeAboutModalBtn');
+        const welcomeModal = document.getElementById('welcomeModal');
+        const closeWelcomeModal = document.getElementById('closeWelcomeModal');
 
         // CountUp instance for current bid
         let currentBidCountUp = null;
@@ -382,26 +383,6 @@
             }
         });
 
-        // Clear database function
-        async function clearDatabase() {
-            if (confirm('⚠️ Are you sure you want to clear all bids? This cannot be undone!')) {
-                try {
-                    console.log('Clearing database...');
-                    await set(currentBidRef, null);
-                    await set(bidsHistoryRef, null);
-                    showToast('🗑️ Database cleared successfully!', 'success');
-                    console.log('Database cleared');
-                } catch (error) {
-                    console.error('Error clearing database:', error);
-                    showToast('❌ Error clearing database', 'warning');
-                }
-            }
-        }
-
-        // Add event listener for clear database button
-        if (clearDatabaseBtn) {
-            clearDatabaseBtn.addEventListener('click', clearDatabase);
-        }
 
         // Modal functions
         function openAboutModal() {
@@ -441,6 +422,44 @@
             }
         });
 
+        // Welcome modal functions
+        function closeWelcomeModalFunc() {
+            welcomeModal.classList.add('hidden');
+            // Mark as seen in localStorage
+            localStorage.setItem('auctionWelcomeSeen', 'true');
+        }
+
+        // Add event listener for welcome modal close button
+        if (closeWelcomeModal) {
+            closeWelcomeModal.addEventListener('click', closeWelcomeModalFunc);
+        }
+
+        // Close welcome modal when clicking outside
+        if (welcomeModal) {
+            welcomeModal.addEventListener('click', (e) => {
+                if (e.target === welcomeModal) {
+                    closeWelcomeModalFunc();
+                }
+            });
+        }
+
+        // Show welcome modal only on first visit
+        function checkWelcomeModal() {
+            const hasSeenWelcome = localStorage.getItem('auctionWelcomeSeen');
+            if (!hasSeenWelcome) {
+                // Show welcome modal on first visit
+                welcomeModal.classList.remove('hidden');
+                // Ensure modal content starts at the top
+                const modalContent = welcomeModal.querySelector('.overflow-y-auto');
+                if (modalContent) {
+                    modalContent.scrollTop = 0;
+                }
+            } else {
+                // Hide welcome modal if already seen
+                welcomeModal.classList.add('hidden');
+            }
+        }
+
         // Initialize display with current data
         get(currentBidRef).then((snapshot) => {
             updateCurrentBid(snapshot.val());
@@ -452,11 +471,61 @@
 
         // Start the countdown timer
         startCountdown();
+
+        // Check and show welcome modal on first visit
+        checkWelcomeModal();
     </script>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <!-- Toast Container -->
     <div id="toastContainer" class="fixed top-4 right-4 z-50 max-w-sm"></div>
+
+    <!-- Welcome Modal -->
+    <div id="welcomeModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[80vh] overflow-y-auto">
+                <div class="p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xl font-semibold text-gray-800">🏌️‍♂️ Welcome to the Auction</h3>
+                    </div>
+                    <div class="space-y-4 text-gray-700">
+                        <div class="bg-green-50 border border-green-200 rounded-lg p-3">
+                            <h4 class="font-semibold text-green-800 mb-2">🏆 What You're Bidding On:</h4>
+                            <p class="text-sm text-gray-700">
+                                <strong>Te Puke Golf Club Voucher</strong><br>
+                                • 4 Players × 18 Holes<br>
+                                • 2 Golf Carts included<br>
+                                • Perfect for a day out with colleagues or friends!
+                            </p>
+                        </div>
+
+                        <div>
+                            <h4 class="font-semibold text-gray-800 mb-2">📋 Bidding Rules:</h4>
+                            <ul class="list-disc list-inside space-y-1 text-sm">
+                                <li><strong>Use your own name</strong> - No fake names or aliases</li>
+                                <li><strong>Do not share outside of staff</strong> - Keep this auction internal</li>
+                                <li><strong>Names will be verified after</strong> - We'll confirm your identity</li>
+                                <li><strong>Bid what you're comfortable with</strong> - All bids are final</li>
+                                <li><strong>Highest bid at 3:00 PM Friday wins</strong> - Auction ends automatically</li>
+                            </ul>
+                        </div>
+
+                        <div class="bg-blue-50 p-3 rounded-lg">
+                            <p class="text-sm text-blue-800">
+                                <strong>⏰ Auction ends:</strong> Friday, October 24, 2025 at 3:00 PM<br>
+                                <strong>🎯 Winner:</strong> Highest bid when countdown reaches zero
+                            </p>
+                        </div>
+                    </div>
+                    <div class="mt-6 flex justify-end">
+                        <button id="closeWelcomeModal" class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg transition-colors">
+                            Start Bidding! 🚀
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- About Modal -->
     <div id="aboutModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden">
@@ -470,7 +539,7 @@
                         </button>
                     </div>
                     <div class="space-y-4 text-gray-700">
-                        <p class="font-medium">Staff Golf Package Live Auction</p>
+                        <p class="font-medium">Te Puke High School Golf Package Live Auction</p>
                         <p>This is a real-time auction system for internal staff bidding on a golf package.</p>
                         
                         <div class="bg-green-50 border border-green-200 rounded-lg p-3">
@@ -522,46 +591,51 @@
     <!-- Header -->
     <header class="bg-white shadow-sm border-b">
         <div class="max-w-4xl mx-auto px-4 py-4">
-            <h1 class="text-2xl font-bold text-gray-900 text-center">
-                🏌️‍♂️ Staff Golf Package Auction
-            </h1>
-            <p class="text-sm text-gray-600 text-center mt-1">
+            <div class="flex items-center justify-between mb-2">
+                <!-- Logo Space -->
+                <div class="w-16 h-16 flex-shrink-0">
+                    <img src="TPHS-Crest.svg" alt="Te Puke High School Crest" class="w-full h-full object-contain">
+                </div>
+                
+                <!-- Title -->
+                <div class="flex-1 text-center">
+                    <h1 class="text-2xl font-bold text-gray-900">
+                        🏌️‍♂️ Te Puke High School Golf Package Auction
+                    </h1>
+                </div>
+                
+                <!-- Spacer for balance -->
+                <div class="w-16 h-16 flex-shrink-0"></div>
+            </div>
+            
+            <p class="text-sm text-gray-600 text-center">
                 Te Puke Golf Club: 4 Players × 18 Holes + 2 Golf Carts • Place your bid below — highest bid wins!
             </p>
         </div>
     </header>
 
     <!-- Main Content -->
-    <main class="max-w-4xl mx-auto px-4 py-8">
+    <main class="max-w-4xl mx-auto px-4 py-4 h-[calc(100vh-120px)] md:flex md:flex-col">
         <!-- Countdown Timer Section -->
-        <section class="bg-white rounded-lg shadow-md p-6 mb-6">
+        <section class="bg-white rounded-lg shadow-md p-4 mb-4 md:flex-shrink-0">
             <div id="countdownDisplay">
                 <!-- Countdown will be inserted here -->
             </div>
         </section>
 
         <!-- Bid Form Section -->
-        <section class="bg-white rounded-lg shadow-md p-6 mb-6">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-2xl font-semibold text-gray-800">
+        <section class="bg-white rounded-lg shadow-md p-4 mb-4 md:flex-shrink-0">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold text-gray-800">
                     Place Your Bid
                 </h2>
-                <div class="flex gap-2">
-                    <button 
-                        id="aboutBtn"
-                        type="button"
-                        class="bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                    >
-                        ℹ️ About
-                    </button>
-                    <button 
-                        id="clearDatabaseBtn"
-                        type="button"
-                        class="bg-red-500 hover:bg-red-600 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
-                    >
-                        🗑️ Clear
-                    </button>
-                </div>
+                <button 
+                    id="aboutBtn"
+                    type="button"
+                    class="bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                >
+                    ℹ️ About
+                </button>
             </div>
             <form id="bidForm" class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
@@ -604,7 +678,7 @@
         </section>
 
         <!-- Current Highest Bid Section -->
-        <section class="bg-white rounded-lg shadow-md p-6 mb-6">
+        <section class="bg-white rounded-lg shadow-md p-4 mb-4 md:flex-shrink-0">
             <div class="flex justify-between items-center">
                 <div>
                     <h2 class="text-lg font-semibold text-gray-800 mb-2">
@@ -626,13 +700,13 @@
         </section>
 
         <!-- Recent Bids Section -->
-        <section class="bg-white rounded-lg shadow-md p-6 flex-1">
-            <h2 class="text-2xl font-semibold text-gray-800 mb-6">
+        <section class="bg-white rounded-lg shadow-md p-4 md:flex-1 md:flex md:flex-col md:min-h-0 h-96 md:h-auto">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4 md:flex-shrink-0">
                 Recent Bids
             </h2>
-            <div class="overflow-y-auto max-h-96">
+            <div class="overflow-y-auto md:flex-1 h-full">
                 <table class="w-full">
-                    <thead class="sticky top-0 bg-white">
+                    <thead class="sticky top-0 bg-white z-10">
                         <tr class="border-b-2 border-gray-200">
                             <th class="text-left px-4 py-3 font-semibold text-gray-700">Name</th>
                             <th class="text-right px-4 py-3 font-semibold text-gray-700">Bid Amount</th>
