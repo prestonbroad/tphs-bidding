@@ -665,9 +665,9 @@
                     return;
                 }
                 
-                // Rate limiting: max 1 click per second
+                // Rate limiting: max 1 click per 500ms
                 const now = Date.now();
-                if (now - lastConfettiClickTime < 1000) {
+                if (now - lastConfettiClickTime < 500) {
                     console.log('Rate limited: too soon');
                     return;
                 }
