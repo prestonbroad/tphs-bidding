@@ -135,13 +135,13 @@
 
         // Confetti function
         function triggerConfetti() {
-            // Get the button position for confetti origin
-            const button = document.querySelector('button[type="submit"]');
-            const rect = button.getBoundingClientRect();
+            // Get the current bid amount element position for confetti origin
+            const bidAmountElement = document.getElementById('currentBidAmount');
+            const rect = bidAmountElement.getBoundingClientRect();
             const x = (rect.left + rect.right) / 2 / window.innerWidth;
             const y = (rect.top + rect.bottom) / 2 / window.innerHeight;
 
-            // Create confetti burst
+            // Create confetti burst from the dollar amount
             confetti({
                 particleCount: 100,
                 spread: 70,
@@ -315,10 +315,10 @@
             // Trigger confetti for all users when a new highest bid is placed
             if (data && lastHighestBid !== null && data.amount > lastHighestBid) {
                 console.log('New highest bid detected! Triggering confetti for all users');
-                // Small delay to ensure the animation is visible
+                // Wait for CountUp animation to finish (1.5 seconds) then trigger confetti
                 setTimeout(() => {
                     triggerConfetti();
-                }, 500);
+                }, 1500);
             }
             
             // Update last highest bid
