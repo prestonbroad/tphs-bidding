@@ -41,6 +41,10 @@
         const toastContainer = document.getElementById('toastContainer');
         const aboutBtn = document.getElementById('aboutBtn');
         const confettiBtn = document.getElementById('confettiBtn');
+        const leaderboardBtn = document.getElementById('leaderboardBtn');
+        const leaderboardModal = document.getElementById('leaderboardModal');
+        const closeLeaderboardModal = document.getElementById('closeLeaderboardModal');
+        const leaderboardContent = document.getElementById('leaderboardContent');
         const aboutModal = document.getElementById('aboutModal');
         const closeAboutModal = document.getElementById('closeAboutModal');
         const closeAboutModalBtn = document.getElementById('closeAboutModalBtn');
@@ -147,10 +151,13 @@
             namePill.textContent = userName;
             namePill.className = 'fixed z-50 bg-gradient-to-r from-yellow-400 to-orange-400 text-white px-4 py-2 rounded-full font-semibold text-sm shadow-lg pointer-events-none';
             
-            // Random horizontal offset (-30px to +30px from button center)
-            const randomOffset = (Math.random() - 0.5) * 60;
-            const startX = rect.left + (rect.width / 2) + randomOffset;
-            const startY = rect.top;
+            // Wider horizontal offset (-60px to +60px from button center)
+            const randomHorizontalOffset = (Math.random() - 0.5) * 120;
+            // Vertical staggering (-20px to +20px from button top)
+            const randomVerticalOffset = (Math.random() - 0.5) * 40;
+            
+            const startX = rect.left + (rect.width / 2) + randomHorizontalOffset;
+            const startY = rect.top + randomVerticalOffset;
             
             // Set initial position
             namePill.style.left = `${startX}px`;
@@ -384,39 +391,130 @@
         });
 
         // Listen for confetti clicks from all users
+        let isInitialLoad = true;
         onValue(confettiClicksRef, (snapshot) => {
             const data = snapshot.val();
             if (data) {
                 console.log('Confetti clicks updated:', data);
                 
+                // Initialize counts storage
+                if (!window.confettiCounts) {
+                    window.confettiCounts = {};
+                }
+                
                 // Check for new clicks by comparing counts
                 Object.entries(data).forEach(([userName, userData]) => {
-                    // Store previous counts to detect changes
-                    if (!window.confettiCounts) {
-                        window.confettiCounts = {};
-                    }
-                    
                     const previousCount = window.confettiCounts[userName] || 0;
                     const newCount = userData.count;
                     
-                    // If count increased, show floating name
-                    if (newCount > previousCount) {
+                    // Only trigger confetti/pills if this is NOT the initial load AND count increased
+                    if (!isInitialLoad && newCount > previousCount) {
                         console.log(`${userName} clicked confetti! Count: ${newCount}`);
                         showFloatingName(userName);
+                        
+                        // Trigger confetti for all users
+                        const rect = confettiBtn.getBoundingClientRect();
+                        const x = (rect.left + rect.right) / 2 / window.innerWidth;
+                        const y = (rect.top + rect.bottom) / 2 / window.innerHeight;
+
+                        confetti({
+                            particleCount: 150,
+                            spread: 80,
+                            origin: { x: x, y: y },
+                            colors: ['#ffd700', '#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#feca57', '#ff9ff3', '#54a0ff'],
+                            shapes: ['star', 'circle'],
+                            scalar: 1.3
+                        });
                     }
                     
                     // Update stored count
                     window.confettiCounts[userName] = newCount;
                 });
+                
+                // After first load, set flag to false
+                if (isInitialLoad) {
+                    isInitialLoad = false;
+                    console.log('Initial confetti counts loaded silently');
+                }
+                
+                // Update leaderboard if modal is open
+                if (leaderboardModal && !leaderboardModal.classList.contains('hidden')) {
+                    updateLeaderboard();
+                }
             }
         }, (error) => {
             console.error('Error listening to confetti clicks:', error);
         });
 
+        // Leaderboard functions
+        function openLeaderboardModal() {
+            leaderboardModal.classList.remove('hidden');
+            updateLeaderboard();
+        }
+
+        function closeLeaderboardModalFunc() {
+            leaderboardModal.classList.add('hidden');
+        }
+
+        function updateLeaderboard() {
+            if (!leaderboardContent) return;
+            
+            // Get confetti data from Firebase
+            get(confettiClicksRef).then((snapshot) => {
+                const data = snapshot.val();
+                if (!data) {
+                    leaderboardContent.innerHTML = '<div class="text-center text-gray-500 py-8">No confetti clicks yet! 🎊</div>';
+                    return;
+                }
+                
+                // Convert to array and sort by count
+                const users = Object.entries(data)
+                    .map(([name, userData]) => ({
+                        name: name,
+                        count: userData.count || 0
+                    }))
+                    .sort((a, b) => b.count - a.count);
+                
+                // Generate leaderboard HTML
+                leaderboardContent.innerHTML = users.map((user, index) => {
+                    const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '🏅';
+                    const isCurrentUser = user.name === currentUserName;
+                    const bgColor = isCurrentUser ? 'bg-yellow-50 border-yellow-200' : 'bg-gray-50 border-gray-200';
+                    
+                    return `
+                        <div class="flex items-center justify-between p-3 rounded-lg border ${bgColor}">
+                            <div class="flex items-center gap-3">
+                                <span class="text-2xl">${medal}</span>
+                                <span class="font-semibold ${isCurrentUser ? 'text-yellow-700' : 'text-gray-800'}">${user.name}</span>
+                                ${isCurrentUser ? '<span class="text-xs bg-yellow-200 text-yellow-800 px-2 py-1 rounded-full">You</span>' : ''}
+                            </div>
+                            <div class="text-right">
+                                <div class="text-2xl font-bold text-purple-600">${user.count}</div>
+                                <div class="text-xs text-gray-500">clicks</div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }).catch((error) => {
+                console.error('Error fetching leaderboard:', error);
+                leaderboardContent.innerHTML = '<div class="text-center text-red-500 py-8">Error loading leaderboard</div>';
+            });
+        }
+
         // Name modal functions
         function showNameModal() {
             nameModal.classList.remove('hidden');
-            userNameInput.focus();
+            
+            // Auto-populate with last used name
+            const lastUsedName = localStorage.getItem('auctionLastUserName');
+            if (lastUsedName) {
+                userNameInput.value = lastUsedName;
+                // Select all text for easy editing
+                userNameInput.select();
+            } else {
+                userNameInput.value = '';
+                userNameInput.focus();
+            }
         }
 
         function hideNameModal() {
@@ -431,6 +529,8 @@
             if (name) {
                 currentUserName = name;
                 sessionStorage.setItem('auctionUserName', name);
+                // Also store in localStorage for auto-population
+                localStorage.setItem('auctionLastUserName', name);
                 currentUserNameDisplay.textContent = name;
                 hideNameModal();
                 
@@ -546,6 +646,15 @@
             aboutBtn.addEventListener('click', openAboutModal);
         }
 
+        // Add event listeners for leaderboard modal
+        if (leaderboardBtn) {
+            leaderboardBtn.addEventListener('click', openLeaderboardModal);
+        }
+
+        if (closeLeaderboardModal) {
+            closeLeaderboardModal.addEventListener('click', closeLeaderboardModalFunc);
+        }
+
         // Add event listener for confetti button
         if (confettiBtn) {
             confettiBtn.addEventListener('click', async () => {
@@ -578,18 +687,6 @@
                     shapes: ['star', 'circle'],
                     scalar: 1.3
                 });
-
-                // Add a second burst for extra celebration
-                setTimeout(() => {
-                    confetti({
-                        particleCount: 100,
-                        spread: 70,
-                        origin: { x: x, y: y },
-                        colors: ['#ff9ff3', '#54a0ff', '#5f27cd', '#00d2d3', '#ff9f43', '#ee5a24'],
-                        shapes: ['star', 'circle'],
-                        scalar: 1.1
-                    });
-                }, 300);
                 
                 // Update Firebase with confetti click
                 try {
@@ -721,6 +818,28 @@
                             Continue to Auction 🏌️‍♂️
                         </button>
                     </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Leaderboard Modal -->
+    <div id="leaderboardModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[80vh] overflow-hidden">
+                <div class="p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xl font-semibold text-gray-800">🎊 Confetti Leaderboard</h3>
+                        <button id="closeLeaderboardModal" class="text-gray-500 hover:text-gray-700 text-2xl font-bold">
+                            ×
+                        </button>
+                    </div>
+                    <div class="text-sm text-gray-600 mb-4">
+                        Who's celebrating the most? 🏆
+                    </div>
+                    <div id="leaderboardContent" class="space-y-2 max-h-96 overflow-y-auto">
+                        <!-- Leaderboard entries will be populated here -->
+                    </div>
                 </div>
             </div>
         </div>
@@ -883,6 +1002,14 @@
                         title="Celebrate! 🎉"
                     >
                         🎊
+                    </button>
+                    <button 
+                        id="leaderboardBtn"
+                        type="button"
+                        class="bg-purple-500 hover:bg-purple-600 text-white text-sm font-medium py-2 px-3 rounded-lg transition-colors focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+                        title="Confetti Leaderboard 🏆"
+                    >
+                        🏆
                     </button>
                     <button 
                         id="aboutBtn"
