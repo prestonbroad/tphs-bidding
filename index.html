@@ -58,6 +58,9 @@
         
         // Track last highest bid for confetti
         let lastHighestBid = null;
+        
+        // Track last confetti click time for rate limiting
+        let lastConfettiClickTime = 0;
 
         // Countdown functionality
         function startCountdown() {
@@ -131,6 +134,46 @@
             // Update immediately and then every second
             updateCountdown();
             countdownInterval = setInterval(updateCountdown, 1000);
+        }
+
+        // Floating name pill function
+        function showFloatingName(userName) {
+            // Get the confetti button position
+            const button = confettiBtn;
+            const rect = button.getBoundingClientRect();
+            
+            // Create the name pill element
+            const namePill = document.createElement('div');
+            namePill.textContent = userName;
+            namePill.className = 'fixed z-50 bg-gradient-to-r from-yellow-400 to-orange-400 text-white px-4 py-2 rounded-full font-semibold text-sm shadow-lg pointer-events-none';
+            
+            // Random horizontal offset (-30px to +30px from button center)
+            const randomOffset = (Math.random() - 0.5) * 60;
+            const startX = rect.left + (rect.width / 2) + randomOffset;
+            const startY = rect.top;
+            
+            // Set initial position
+            namePill.style.left = `${startX}px`;
+            namePill.style.top = `${startY}px`;
+            namePill.style.transform = 'translate(-50%, -50%)';
+            namePill.style.opacity = '1';
+            namePill.style.transition = 'all 2s ease-out';
+            
+            // Add to document
+            document.body.appendChild(namePill);
+            
+            // Trigger animation after a small delay
+            setTimeout(() => {
+                namePill.style.top = `${startY - 150}px`; // Float up 150px
+                namePill.style.opacity = '0'; // Fade out
+            }, 50);
+            
+            // Remove from DOM after animation
+            setTimeout(() => {
+                if (namePill.parentNode) {
+                    namePill.parentNode.removeChild(namePill);
+                }
+            }, 2100);
         }
 
         // Confetti function
@@ -301,6 +344,7 @@
         // Set up real-time listeners
         const currentBidRef = ref(database, 'bids/current');
         const bidsHistoryRef = ref(database, 'bids/history');
+        const confettiClicksRef = ref(database, 'confetti-clicks');
 
         console.log('Setting up Firebase listeners...');
         console.log('Database URL:', firebaseConfig.databaseURL);
@@ -337,6 +381,36 @@
             updateBidsHistory(data);
         }, (error) => {
             console.error('Error listening to bids history:', error);
+        });
+
+        // Listen for confetti clicks from all users
+        onValue(confettiClicksRef, (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                console.log('Confetti clicks updated:', data);
+                
+                // Check for new clicks by comparing counts
+                Object.entries(data).forEach(([userName, userData]) => {
+                    // Store previous counts to detect changes
+                    if (!window.confettiCounts) {
+                        window.confettiCounts = {};
+                    }
+                    
+                    const previousCount = window.confettiCounts[userName] || 0;
+                    const newCount = userData.count;
+                    
+                    // If count increased, show floating name
+                    if (newCount > previousCount) {
+                        console.log(`${userName} clicked confetti! Count: ${newCount}`);
+                        showFloatingName(userName);
+                    }
+                    
+                    // Update stored count
+                    window.confettiCounts[userName] = newCount;
+                });
+            }
+        }, (error) => {
+            console.error('Error listening to confetti clicks:', error);
         });
 
         // Name modal functions
@@ -474,7 +548,22 @@
 
         // Add event listener for confetti button
         if (confettiBtn) {
-            confettiBtn.addEventListener('click', () => {
+            confettiBtn.addEventListener('click', async () => {
+                // Check if user has entered name
+                if (!currentUserName) {
+                    showToast('⚠️ Please enter your name first', 'warning');
+                    showNameModal();
+                    return;
+                }
+                
+                // Rate limiting: max 1 click per second
+                const now = Date.now();
+                if (now - lastConfettiClickTime < 1000) {
+                    console.log('Rate limited: too soon');
+                    return;
+                }
+                lastConfettiClickTime = now;
+                
                 // Get the button position for confetti origin
                 const rect = confettiBtn.getBoundingClientRect();
                 const x = (rect.left + rect.right) / 2 / window.innerWidth;
@@ -501,6 +590,22 @@
                         scalar: 1.1
                     });
                 }, 300);
+                
+                // Update Firebase with confetti click
+                try {
+                    const userConfettiRef = ref(database, `confetti-clicks/${currentUserName}`);
+                    const snapshot = await get(userConfettiRef);
+                    const currentData = snapshot.val() || { count: 0 };
+                    
+                    await set(userConfettiRef, {
+                        count: currentData.count + 1,
+                        lastClick: now
+                    });
+                    
+                    console.log('Confetti click recorded for:', currentUserName);
+                } catch (error) {
+                    console.error('Error recording confetti click:', error);
+                }
             });
         }
 
